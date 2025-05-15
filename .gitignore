@@ -1,0 +1,5 @@
+\.venv
+\.vscode
+\.envvar.py
+\.env
+\__pycache__
