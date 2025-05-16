@@ -2,12 +2,14 @@ import feedparser as fp
 import pandas as pd
 import re
 import datetime
+import urllib.parse
 
 class ArxivQuery():
     def __init__(self, keyword, max_query = 20):
         self.keyword = keyword
         self.max_query= max_query
-        self.query = "http://export.arxiv.org/api/query?search_query=all:" + self.keyword + "&start=0&max_results=" + str(self.max_query)
+        self.encoded_keyword = urllib.parse.quote(keyword)
+        self.query = "http://export.arxiv.org/api/query?search_query=all:" + self.encoded_keyword + "&start=0&max_results=" + str(self.max_query)
         self.time = datetime.datetime.now()
         self.raw_data = fp.parse(self.query) 
         self.df = self.parse_entry()
