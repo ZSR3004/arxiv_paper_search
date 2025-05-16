@@ -9,7 +9,7 @@ class WordClass(BaseModel):
     word: str
     score: float
 
-class Embed:
+class Embed():
     def __init__(self, client, similarity_threshold=0.75):
         self.client = client
         self.similarity_threshold = similarity_threshold
@@ -120,7 +120,7 @@ class Embed:
         reduced = self._reduce_keywords(df, word_map)
         return reduced
 
-    def link_papers(df, keywords):
+    def link_papers(self, df, keywords):
         links_dict = {}
         for keyword, paper_scores in keywords.items():
             for i in range(len(paper_scores)):
@@ -147,7 +147,7 @@ class Embed:
         links_df = pd.DataFrame(link_rows)
         return links_df
 
-    def build_graph_from_links(links_df):
+    def build_graph_from_links(self, links_df):
         G = nx.Graph()
         for _, row in links_df.iterrows():
             paper1 = row["paper_1"]
@@ -156,7 +156,7 @@ class Embed:
             G.add_edge(paper1, paper2, weight=weight)
         return G
 
-    def display_graph_with_weights(G, title="Paper Similarity Graph"):
+    def display_graph_with_weights(self, G, title="Paper Similarity Graph"):
         plt.figure(figsize=(12, 8))
         pos = nx.spring_layout(G, seed=42)
 
