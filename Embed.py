@@ -102,10 +102,6 @@ class Embed():
                     words.pop(keyword, None)
         return merged
 
-    def _reduce_keywords(self, df, words):
-        self._combine_keywords(words)
-        return words
-
     def extract_keywords(self, df):
         word_map = {}
 
@@ -125,7 +121,7 @@ class Embed():
                 else:
                     word_map[key] = [(i, score)]
 
-        reduced = self._reduce_keywords(df, word_map)
+        reduced = self._combine_keywords(word_map)
         return reduced
 
     def link_papers(self, df, keywords):
