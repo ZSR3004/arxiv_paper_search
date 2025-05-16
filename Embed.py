@@ -24,7 +24,7 @@ class Embed():
             reflect how well the keyword relates to the summary.
 
             Please keep the keywords as short as possible, ideally one or two words. Avoid using phrases longer than 
-            three words. Also, only give me three keywords or less.
+            three words. Please give the most relevant keywords first and no more than 3 keywords.
 
             Return a JSON array of objects. Each object must have two keys:
             - "word": the keyword (a string)
@@ -69,8 +69,9 @@ class Embed():
     def _combine_keywords(self, words):
         embeddings = {}
         for word in words:
-            embeddings['word'] = self._embed_word(word)
-            time.sleep(0.5) # Delay API calls to avoid rate limits
+            embeddings[word] = self._embed_word(word)
+            time.sleep(1)  # Delay API calls to avoid rate limits
+
         keys = list(embeddings.keys())
         merged = {}
         to_remove = set()
@@ -84,7 +85,7 @@ class Embed():
                 if compare in to_remove:
                     continue
                 sim = self._cosine_similarity(embeddings[base], embeddings[compare])
-                if sim > self.similarity_threshold:
+                if sim >= self.similarity_threshold:
                     merged.setdefault(base, []).append((compare, sim))
                     to_remove.add(compare)
 
@@ -96,64 +97,72 @@ class Embed():
                         combined[idx] = max(combined.get(idx, 0), score)
                     for idx, score in words[keyword]:
                         combined[idx] = max(combined.get(idx, 0), score)
-                    # Update merged target keyword
                     words[target] = [(idx, score) for idx, score in combined.items()]
-                    # Remove merged keyword
                     words.pop(keyword, None)
+
         return merged
+
+    def _reduce_keywords(self, df, words):
+        self._combine_keywords(words)
+        return words
 
     def extract_keywords(self, df):
         word_map = {}
-
         for i in range(len(df)):
-            summary = df.iloc[i]["summary"]
+            index = df.index[i]
+            summary = df.loc[index, "summary"]
             try:
                 keywords = self._get_keywords(summary)
             except Exception as e:
-                print(f"Failed to get keywords for row {i}: {e}")
+                print(f"Failed to get keywords for row {index}: {e}")
                 continue
 
             for word in keywords:
                 key = word["word"]
                 score = word["score"]
                 if key in word_map:
-                    word_map[key].append((i, score))
+                    word_map[key].append((index, score))
                 else:
-                    word_map[key] = [(i, score)]
+                    word_map[key] = [(index, score)]
 
-        reduced = self._combine_keywords(word_map)
+        reduced = self._reduce_keywords(df, word_map)
         return reduced
 
-    def link_papers(self, df, keywords):
-        links_dict = {}
-        for keyword, paper_scores in keywords.items():
-            for i in range(len(paper_scores)):
-                idx_i, score_i = paper_scores[i]
-                for j in range(i + 1, len(paper_scores)):
-                    idx_j, score_j = paper_scores[j]
-                    paper_pair = tuple(sorted((idx_i, idx_j)))
-                    if score_i > score_j:
-                        avg_score = score_i
-                    else:
-                        avg_score = score_j
+    def _filter_keywords(self, all_keywords):
+        d = {}
+        for keyword, values in all_keywords.items():
+            if (len(values) <= 1):
+                continue
+            d[keyword] = values
+        return d
 
-                    if paper_pair not in links_dict:
-                        links_dict[paper_pair] = {"scores": [avg_score]}
-                    else:
-                        links_dict[paper_pair]["scores"].append(avg_score)
+    def _get_score(self, paper1, paper2):
+        score1 = paper1
+        score2 = paper2
+        avg_score = (score1 + score2) / 2
+        return avg_score
 
-        link_rows = []
-        for (i, j), data in links_dict.items():
-            avg_score = sum(data["scores"]) / len(data["scores"])
-            link_rows.append({
-                "paper_1": df.iloc[i]["title"],
-                "paper_2": df.iloc[j]["title"],
-                "score": round(avg_score, 3)
-            })
+    def _idx_to_title(self, df, idx):
+        try:
+            title = df.iloc[idx]['title']
+        except KeyError:
+            title = None
+        return title
+    
+    def link_papers(self, papers, all_keywords):
+        d = self._filter_keywords(all_keywords)
+        df = pd.DataFrame(columns = ['paper_1', 'paper_2', 'score'])
 
-        links_df = pd.DataFrame(link_rows)
-        return links_df
-
+        for keyword, values in d.items():
+            print(keyword)
+            for i in range(len(values)):
+                for j in range(i + 1, len(values)):
+                    print(values[i], values[j])
+                    score = self._get_score(values[i][1], values[j][1])
+                    df.loc[len(df)] = [self._idx_to_title(papers, values[i][0]), 
+                                       self._idx_to_title(papers, values[j][0]), score]
+        return df
+    
     def build_graph_from_links(self, links_df):
         G = nx.Graph()
         for _, row in links_df.iterrows():
@@ -164,13 +173,17 @@ class Embed():
         return G
 
     def display_graph_with_weights(self, G, title="Paper Similarity Graph"):
-        plt.figure(figsize=(12, 8))
-        pos = nx.spring_layout(G, seed=42)
+        plt.figure(figsize=(14, 10))
+
+        pos = nx.spring_layout(G, seed=42, k=1.2, scale=3.0)
 
         nx.draw_networkx_nodes(G, pos, node_color='lightblue', node_size=1000)
 
         edge_weights = [G[u][v]['weight'] for u, v in G.edges]
-        nx.draw_networkx_edges(G, pos, width=[3 * w for w in edge_weights], edge_color=edge_weights, edge_cmap=plt.cm.Blues)
+        nx.draw_networkx_edges(
+            G, pos, width=[3 * w for w in edge_weights], 
+            edge_color=edge_weights, edge_cmap=plt.cm.Blues
+        )
 
         nx.draw_networkx_labels(G, pos, font_size=10, font_weight='bold')
         edge_labels = {(u, v): f"{d['weight']:.2f}" for u, v, d in G.edges(data=True)}
