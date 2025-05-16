@@ -114,7 +114,7 @@ class Embed():
             try:
                 keywords = self._get_keywords(summary)
             except Exception as e:
-                print(f"Failed to get keywords for row {index}: {e}")
+                # print(f"Failed to get keywords for row {index}: {e}")
                 continue
 
             for word in keywords:
@@ -154,10 +154,8 @@ class Embed():
         df = pd.DataFrame(columns = ['paper_1', 'paper_2', 'score'])
 
         for keyword, values in d.items():
-            print(keyword)
             for i in range(len(values)):
                 for j in range(i + 1, len(values)):
-                    print(values[i], values[j])
                     score = self._get_score(values[i][1], values[j][1])
                     df.loc[len(df)] = [self._idx_to_title(papers, values[i][0]), 
                                        self._idx_to_title(papers, values[j][0]), score]
