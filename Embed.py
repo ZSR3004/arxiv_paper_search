@@ -4,6 +4,7 @@ import json
 import networkx as nx
 import matplotlib.pyplot as plt
 from pydantic import BaseModel
+import time
 
 class WordClass(BaseModel):
     word: str
@@ -16,10 +17,14 @@ class Embed():
 
     def _get_keywords(self, summary):
         prompt = f"""
-            You are given a summary of a research paper. Your task is to extract keywords from it that can be used to find other, related papers.
+            You are given a summary of a research paper. Your task is to extract keywords from it that can be used to 
+            find other, related papers.
 
-            You will also assign a score from 0 to 1 to each keyword, with 1 being the most relevant. The score should reflect how well the keyword relates 
-            to the summary.
+            You will also assign a score from 0 to 1 to each keyword, with 1 being the most relevant. The score should 
+            reflect how well the keyword relates to the summary.
+
+            Please keep the keywords as short as possible, ideally one or two words. Avoid using phrases longer than 
+            three words. Also, only give me three keywords or less.
 
             Return a JSON array of objects. Each object must have two keys:
             - "word": the keyword (a string)
@@ -62,7 +67,10 @@ class Embed():
         return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
 
     def _combine_keywords(self, words):
-        embeddings = {word: self._embed_word(word) for word in words}
+        embeddings = {}
+        for word in words:
+            embeddings['word'] = self._embed_word(word)
+            time.sleep(0.5) # Delay API calls to avoid rate limits
         keys = list(embeddings.keys())
         merged = {}
         to_remove = set()
@@ -128,7 +136,10 @@ class Embed():
                 for j in range(i + 1, len(paper_scores)):
                     idx_j, score_j = paper_scores[j]
                     paper_pair = tuple(sorted((idx_i, idx_j)))
-                    avg_score = (score_i + score_j) / 2
+                    if score_i > score_j:
+                        avg_score = score_i
+                    else:
+                        avg_score = score_j
 
                     if paper_pair not in links_dict:
                         links_dict[paper_pair] = {"scores": [avg_score]}
