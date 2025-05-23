@@ -5,6 +5,11 @@ Date: 2025-22-05
 
 Brief: This file contains the find_similar_papers function which is used to find similar research papers from arxiv.org 
 based on a starting keyword.
+
+This script uses the arXiv API to fetch academic paper metadata.
+API documentation: https://arxiv.org/help/api
+
+This project is not affiliated with or endorsed by arXiv.
 """
 
 import pandas as pd
