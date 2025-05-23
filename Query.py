@@ -1,8 +1,16 @@
-import feedparser as fp
-import pandas as pd
+"""
+File: Query.py
+Author: Ziyad Rahman
+Date: 2025-22-05
+
+Brief: This file contains the Query class which is used to query the arxiv.org API.
+"""
+
 import re
 import datetime
 import urllib.parse
+import pandas as pd
+import feedparser as fp
 
 class Query():
     """ This class is just used to query from arxiv.org. It's main function is to turn the data into a 

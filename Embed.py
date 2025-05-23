@@ -1,10 +1,18 @@
+"""
+File: Embed.py
+Author: Ziyad Rahman
+Date: 2025-22-05
+
+Brief: This file contains the Embed class, which is used to extract keywords from the summary of a research paper.
+"""
+
+import json
+import time
 import numpy as np
 import pandas as pd
-import json
 import networkx as nx
-import matplotlib.pyplot as plt
 from pydantic import BaseModel
-import time
+import matplotlib.pyplot as plt
 
 class WordClass(BaseModel):
     word: str

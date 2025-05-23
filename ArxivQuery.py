@@ -1,7 +1,17 @@
+"""
+File: ArxivQuery.py
+Author: Ziyad Rahman
+Date: 2025-22-05
+
+Brief: This file contains the find_similar_papers function which is used to find similar research papers from arxiv.org 
+based on a starting keyword.
+"""
+
 import pandas as pd
 from queue import Queue
 from google import genai
 
+# Modules
 import Query as aq
 import Embed as eb
 
