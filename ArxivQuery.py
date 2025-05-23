@@ -1,52 +1,76 @@
-import feedparser as fp
 import pandas as pd
-import re
-import datetime
-import urllib.parse
+from queue import Queue
+from google import genai
 
-class ArxivQuery():
-    """ This class is just used to query from arxiv.org. It's main function is to turn the data into a 
-    pandas dataframe. For the rest of the program to work with.
+import Query as aq
+import Embed as eb
+
+def keyword_dict_merge(dict1, dict2):
+    """ This just mereges two keyword dictionaries.
+    It basically removes duplicate keyword values and
+    correctly appends papers to the value list.
     """
-    def __init__(self, keyword, max_query = 20):
-        self.keyword = keyword
-        self.max_query= max_query
-        self.encoded_keyword = urllib.parse.quote(keyword)
-        self.query = "http://export.arxiv.org/api/query?search_query=all:" + self.encoded_keyword + "&start=0&max_results=" + str(self.max_query)
-        self.time = datetime.datetime.now()
-        self.raw_data = fp.parse(self.query) 
-        self.df = self.parse_entry()
+    merged = {}
+    all_keys = set(dict1) | set(dict2)
 
-    def __get_authors(self, authors):
-        """ This function is used to get the authors from the raw data. It returns a list of authors. 
-        """
-        t = []
-        for author in authors:
-            t.append(author['name'])
-        return t
-    
-    def __get_date(self, date):
-        """ This function is used to get the date from the raw data. It returns the year. It's not
-        used in the final produce (unless the user wants to use it). This was mostly used for debugging
-        purposes.
-        """
-        regexp = r"(\d{4}).*"
-        match = re.search(regexp, date)
-        if match:
-            return match.group(1)
-        else:
-            return None
-    
-    def parse_entry(self):
-        """ This function is used to parse the raw data into a pandas dataframe.
-        """
-        data = self.raw_data['entries']
-        df = pd.DataFrame(columns = ['title', 'summary', 'published', 'authors', 'link'])
-        for entry in data:
-            title = entry['title']
-            summary = entry['summary']
-            published = self.__get_date(entry['published'])
-            authors = self.__get_authors(entry['authors'])
-            link = entry['link']
-            df.loc[len(df)] = [title, summary, published, authors, link]
-        return df
+    for key in all_keys:
+        combined_scores = {}
+        for d in (dict1, dict2):
+            if key in d:
+                for idx, score in d[key]:
+                    if idx in combined_scores:
+                        combined_scores[idx] = max(combined_scores[idx], score)
+                    else:
+                        combined_scores[idx] = score
+        merged[key] = [(idx, score) for idx, score in combined_scores.items()]
+    return merged
+
+def find_similar_papers(keyword, api_key, paper_n=3, rounds=2, similiarity_threshold=0.75, q_size=5):
+    """ Finds and links similar research papers from Arxiv based on a starting keyword.
+    """
+    client = genai.Client(api_key=api_key)
+    emb = eb.Embed(client, similiarity_threshold)
+    df = pd.DataFrame(columns=['title', 'summary', 'published', 'authors', 'link'])
+
+    # Get initial query
+    query = aq.ArxivQuery(keyword, paper_n)
+    query.df = query.df.reset_index(drop=True)
+    df = pd.concat([df, query.df], ignore_index=True)
+
+    keywords = emb.extract_keywords(query.df)
+    all_keywords = {}
+
+    for key, values in keywords.items():
+        all_keywords[key] = [(int(idx), score) for idx, score in values]
+
+    # Iterate through the keywords to add papers to our dataframe
+    q = Queue()
+    seen_terms = set()
+    for i in range(rounds):
+        for term in keywords:
+            if term not in seen_terms:
+                q.put(term)
+                seen_terms.add(term)
+
+        j = 0
+        while j < q_size:
+            if q.empty():
+                break
+
+            new_term = q.get()
+            query = aq.ArxivQuery(new_term, paper_n)
+            qdf = query.df.reset_index(drop=True)
+            start_idx = len(df)
+            df = pd.concat([df, qdf], ignore_index=True)
+            keywords = emb.extract_keywords(qdf)
+            shifted_keywords = {}
+            for key, values in keywords.items():
+                shifted_keywords[key] = [(start_idx + int(idx), score) for idx, score in values]
+            all_keywords = keyword_dict_merge(all_keywords, shifted_keywords)
+            j += 1
+
+    # Link papers and create graph
+    linked_papers = emb.link_papers(df, all_keywords)
+    G = emb.build_graph_from_links(linked_papers)
+    emb.display_graph_with_weights(G)
+    return G, all_keywords, df
